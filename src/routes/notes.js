@@ -46,7 +46,12 @@ router.get('/user/:email/category/:categoryName', async (req, res, next) => {
       return res.json([])
     }
     const notes = await prisma.note.findMany({
-      where: { userId: user.id, categoryId: category.id, deletedAt: null },
+      where: {
+        userId: user.id,
+        categoryId: category.id,
+        deletedAt: null,
+        clearanceLevel: { rank: { lte: req.user.clearanceLevelRank } }
+      },
       include: {
         user: { select: { id: true, email: true, name: true, createdAt: true } },
         category: true
@@ -75,7 +80,11 @@ router.get('/user/:email', async (req, res, next) => {
       return res.json([])
     }
     const notes = await prisma.note.findMany({
-      where: { userId: user.id, deletedAt: null },
+      where: {
+        userId: user.id,
+        deletedAt: null,
+        clearanceLevel: { rank: { lte: req.user.clearanceLevelRank } }
+      },
       include: {
         user: { select: { id: true, email: true, name: true, createdAt: true } },
         category: true
@@ -108,7 +117,11 @@ router.get('/category/:categoryName', async (req, res, next) => {
       return next(err)
     }
     const notes = await prisma.note.findMany({
-      where: { categoryId: category.id, deletedAt: null },
+      where: {
+        categoryId: category.id,
+        deletedAt: null,
+        clearanceLevel: { rank: { lte: req.user.clearanceLevelRank } }
+      },
       include: {
         user: { select: { id: true, email: true, name: true, createdAt: true } },
         category: true
@@ -136,10 +149,16 @@ router.get('/:id', async (req, res, next) => {
       where: { id },
       include: {
         user: { select: { id: true, email: true, name: true, createdAt: true } },
-        category: true
+        category: true,
+        clearanceLevel: true
       }
     })
     if (!note || note.deletedAt) {
+      const err = new Error('Note not found')
+      err.status = 404
+      return next(err)
+    }
+    if (note.clearanceLevel.rank > req.user.clearanceLevelRank) {
       const err = new Error('Note not found')
       err.status = 404
       return next(err)
@@ -175,8 +194,16 @@ router.patch('/:id', async (req, res, next) => {
       err.status = 400
       return next(err)
     }
-    const note = await prisma.note.findUnique({ where: { id } })
+    const note = await prisma.note.findUnique({
+      where: { id },
+      include: { clearanceLevel: true }
+    })
     if (!note || note.deletedAt) {
+      const err = new Error('Note not found')
+      err.status = 404
+      return next(err)
+    }
+    if (note.clearanceLevel.rank > req.user.clearanceLevelRank) {
       const err = new Error('Note not found')
       err.status = 404
       return next(err)
@@ -209,8 +236,16 @@ router.delete('/:id', async (req, res, next) => {
       err.status = 404
       return next(err)
     }
-    const note = await prisma.note.findUnique({ where: { id } })
+    const note = await prisma.note.findUnique({
+      where: { id },
+      include: { clearanceLevel: true }
+    })
     if (!note || note.deletedAt) {
+      const err = new Error('Note not found')
+      err.status = 404
+      return next(err)
+    }
+    if (note.clearanceLevel.rank > req.user.clearanceLevelRank) {
       const err = new Error('Note not found')
       err.status = 404
       return next(err)
@@ -259,6 +294,11 @@ router.post('/', noteSubmitLimiter, async (req, res, next) => {
     }
 
     const noneLevel = await prisma.clearanceLevel.findUnique({ where: { name: 'none' } })
+    if (!noneLevel) {
+      const err = new Error('none clearance level not found')
+      err.status = 500
+      return next(err)
+    }
 
     const user = await prisma.user.upsert({
       where: { email },

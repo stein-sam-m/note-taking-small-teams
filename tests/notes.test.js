@@ -440,3 +440,127 @@ describe('GET /notes/user/:email/category/:categoryName', () => {
     expect(res.body).toEqual([])
   })
 })
+
+describe('Clearance level read filtering', () => {
+  let noneToken
+  let secretToken
+  let polygraphToken
+  let noneUserId
+  let secretClearanceLevelId
+  let polygraphClearanceLevelId
+
+  beforeEach(async () => {
+    // Register a none-level user
+    await request(app).post('/auth/register').send({
+      email: 'filter-none@example.com', name: 'Filter None', password: 'pass123', clearanceLevelName: 'none'
+    })
+    const noneLogin = await request(app).post('/auth/login').send({ email: 'filter-none@example.com', password: 'pass123' })
+    noneToken = noneLogin.body.token
+    noneUserId = jwt.decode(noneToken).id
+
+    // Register a secret-level user
+    await request(app).post('/auth/register').send({
+      email: 'filter-secret@example.com', name: 'Filter Secret', password: 'pass123', clearanceLevelName: 'secret'
+    })
+    const secretLogin = await request(app).post('/auth/login').send({ email: 'filter-secret@example.com', password: 'pass123' })
+    secretToken = secretLogin.body.token
+
+    // Register a polygraph-level user
+    await request(app).post('/auth/register').send({
+      email: 'filter-polygraph@example.com', name: 'Filter Polygraph', password: 'pass123', clearanceLevelName: 'polygraph'
+    })
+    const polygraphLogin = await request(app).post('/auth/login').send({ email: 'filter-polygraph@example.com', password: 'pass123' })
+    polygraphToken = polygraphLogin.body.token
+
+    const secretCl = await prisma.clearanceLevel.findUnique({ where: { name: 'secret' } })
+    secretClearanceLevelId = secretCl.id
+    const polygraphCl = await prisma.clearanceLevel.findUnique({ where: { name: 'polygraph' } })
+    polygraphClearanceLevelId = polygraphCl.id
+  })
+
+  it('none-level user sees only none-level notes on GET /notes/user/:email', async () => {
+    // Create one none note and one secret note owned by noneUserId
+    await prisma.note.create({
+      data: { title: 'None Note', body: 'Body', userId: noneUserId, categoryId: engineeringCategoryId, clearanceLevelId: noneClearanceLevelId }
+    })
+    await prisma.note.create({
+      data: { title: 'Secret Note', body: 'Body', userId: noneUserId, categoryId: engineeringCategoryId, clearanceLevelId: secretClearanceLevelId }
+    })
+    const res = await request(app)
+      .get('/notes/user/filter-none@example.com')
+      .set('Authorization', `Bearer ${noneToken}`)
+    expect(res.status).toBe(200)
+    expect(res.body.length).toBe(1)
+    expect(res.body[0].title).toBe('None Note')
+  })
+
+  it('secret-level user sees none and secret notes on GET /notes/user/:email', async () => {
+    await prisma.note.create({
+      data: { title: 'None Note', body: 'Body', userId: noneUserId, categoryId: engineeringCategoryId, clearanceLevelId: noneClearanceLevelId }
+    })
+    await prisma.note.create({
+      data: { title: 'Secret Note', body: 'Body', userId: noneUserId, categoryId: engineeringCategoryId, clearanceLevelId: secretClearanceLevelId }
+    })
+    await prisma.note.create({
+      data: { title: 'Polygraph Note', body: 'Body', userId: noneUserId, categoryId: engineeringCategoryId, clearanceLevelId: polygraphClearanceLevelId }
+    })
+    const res = await request(app)
+      .get('/notes/user/filter-none@example.com')
+      .set('Authorization', `Bearer ${secretToken}`)
+    expect(res.status).toBe(200)
+    expect(res.body.length).toBe(2)
+    const titles = res.body.map(n => n.title).sort()
+    expect(titles).toEqual(['None Note', 'Secret Note'])
+  })
+
+  it('polygraph-level user sees all notes on GET /notes/user/:email', async () => {
+    await prisma.note.create({
+      data: { title: 'None Note', body: 'Body', userId: noneUserId, categoryId: engineeringCategoryId, clearanceLevelId: noneClearanceLevelId }
+    })
+    await prisma.note.create({
+      data: { title: 'Secret Note', body: 'Body', userId: noneUserId, categoryId: engineeringCategoryId, clearanceLevelId: secretClearanceLevelId }
+    })
+    await prisma.note.create({
+      data: { title: 'Polygraph Note', body: 'Body', userId: noneUserId, categoryId: engineeringCategoryId, clearanceLevelId: polygraphClearanceLevelId }
+    })
+    const res = await request(app)
+      .get('/notes/user/filter-none@example.com')
+      .set('Authorization', `Bearer ${polygraphToken}`)
+    expect(res.status).toBe(200)
+    expect(res.body.length).toBe(3)
+  })
+
+  it('returns 404 for GET /notes/:id when note is above user clearance', async () => {
+    const secretNote = await prisma.note.create({
+      data: { title: 'Secret Note', body: 'Body', userId: noneUserId, categoryId: engineeringCategoryId, clearanceLevelId: secretClearanceLevelId }
+    })
+    const res = await request(app)
+      .get(`/notes/${secretNote.id}`)
+      .set('Authorization', `Bearer ${noneToken}`)
+    expect(res.status).toBe(404)
+    expect(res.body).toEqual({ error: 'Note not found' })
+  })
+
+  it('returns 404 for PATCH /notes/:id when note is above user clearance', async () => {
+    const secretNote = await prisma.note.create({
+      data: { title: 'Secret Note', body: 'Body', userId: noneUserId, categoryId: engineeringCategoryId, clearanceLevelId: secretClearanceLevelId }
+    })
+    const res = await request(app)
+      .patch(`/notes/${secretNote.id}`)
+      .set('Authorization', `Bearer ${noneToken}`)
+      .send({ title: 'Hacked' })
+    expect(res.status).toBe(404)
+    expect(res.body).toEqual({ error: 'Note not found' })
+  })
+
+  it('returns 404 for DELETE /notes/:id when note is above user clearance', async () => {
+    const secretNote = await prisma.note.create({
+      data: { title: 'Secret Note', body: 'Body', userId: noneUserId, categoryId: engineeringCategoryId, clearanceLevelId: secretClearanceLevelId }
+    })
+    const res = await request(app)
+      .delete(`/notes/${secretNote.id}`)
+      .set('Authorization', `Bearer ${noneToken}`)
+    expect(res.status).toBe(404)
+    expect(res.body).toEqual({ error: 'Note not found' })
+  })
+})
