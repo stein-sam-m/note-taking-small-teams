@@ -57,7 +57,9 @@ curl http://localhost:3000/categories \
 
 - **JWT over OAuth:** JWTs were chosen because this API is intended to be used across multiple domains and teams. OAuth would tie us to a single identity provider and complicate cross-domain usage; JWTs are stateless and portable at the cost of no SSO support.
 
-- **Custom ORM approach:** We control the data model entirely — we're the only team using this service. We don't need to bind to each team's existing data structure; all we need is a unique identifier from the org. This lets us keep the schema flexible and tailored to our needs rather than adapting to external data ownership.
+- **Custom ORM approach:** We control the data model entirely since we're the only "team" owning this service. We don't need to bind to each team's existing data structure; all we need is a unique identifier from the org. This lets us keep the schema flexible and tailored to our needs rather than adapting to external data ownership.
+
+- **Further goals:** I would have liked to ensure cross domain notes don't link, so a basic level would be ensuring you can only read notes from users with the same @email.com address as yours.  I would also like to add admin levels ontop of clearance levels.  So there could be users, admins and superusers.  Admins could access certain things like deleting while.  Superusers could add new users, change clearance levels (maybe if that's how the law works but probably isn't) and generate email links for admins to register as admins.
 
 ## ⚠️ Token Expiry
 
