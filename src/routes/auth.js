@@ -7,9 +7,15 @@ const router = Router()
 
 router.post('/register', async (req, res, next) => {
   try {
-    const { email, name, password } = req.body
+    const { email, name, password, clearanceLevelName = 'none' } = req.body
     if (!email || !name || !password) {
       const err = new Error('email, name, and password are required')
+      err.status = 400
+      return next(err)
+    }
+    const clearanceLevel = await prisma.clearanceLevel.findUnique({ where: { name: clearanceLevelName } })
+    if (!clearanceLevel) {
+      const err = new Error('invalid clearance level')
       err.status = 400
       return next(err)
     }
@@ -21,9 +27,15 @@ router.post('/register', async (req, res, next) => {
     }
     const hash = await bcrypt.hash(password, 10)
     const user = await prisma.user.create({
-      data: { email, name, password: hash }
+      data: { email, name, password: hash, clearanceLevelId: clearanceLevel.id }
     })
-    res.status(201).json({ id: user.id, email: user.email, name: user.name, createdAt: user.createdAt })
+    res.status(201).json({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      clearanceLevelName: clearanceLevel.name,
+      createdAt: user.createdAt
+    })
   } catch (err) {
     next(err)
   }
@@ -37,7 +49,10 @@ router.post('/login', async (req, res, next) => {
       err.status = 401
       return next(err)
     }
-    const user = await prisma.user.findUnique({ where: { email } })
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { clearanceLevel: true }
+    })
     if (!user || !user.password) {
       const err = new Error('Invalid credentials')
       err.status = 401
@@ -50,7 +65,7 @@ router.post('/login', async (req, res, next) => {
       return next(err)
     }
     const token = jwt.sign(
-      { id: user.id, email: user.email },
+      { id: user.id, email: user.email, clearanceLevelRank: user.clearanceLevel.rank },
       process.env.JWT_SECRET
     )
     res.json({ token })

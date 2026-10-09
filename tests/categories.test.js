@@ -7,7 +7,7 @@ let token
 beforeAll(async () => {
   await request(app)
     .post('/auth/register')
-    .send({ email: 'testauth@example.com', name: 'Test Auth', password: 'testpass123' })
+    .send({ email: 'testauth@example.com', name: 'Test Auth', password: 'testpass123', clearanceLevelName: 'none' })
   const res = await request(app)
     .post('/auth/login')
     .send({ email: 'testauth@example.com', password: 'testpass123' })

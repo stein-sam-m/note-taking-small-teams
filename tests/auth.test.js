@@ -1,6 +1,7 @@
 const request = require('supertest')
 const app = require('../src/index')
 const prisma = require('../src/lib/prisma')
+const jwt = require('jsonwebtoken')
 
 beforeEach(async () => {
   await prisma.note.deleteMany()
@@ -40,13 +41,37 @@ describe('POST /auth/register', () => {
     expect(res.status).toBe(400)
     expect(res.body).toEqual({ error: 'Email already registered' })
   })
+
+  it('includes clearanceLevelName in 201 response when provided', async () => {
+    const res = await request(app)
+      .post('/auth/register')
+      .send({ email: 'alice@example.com', name: 'Alice', password: 'secret123', clearanceLevelName: 'secret' })
+    expect(res.status).toBe(201)
+    expect(res.body.clearanceLevelName).toBe('secret')
+  })
+
+  it('defaults clearanceLevelName to none when omitted', async () => {
+    const res = await request(app)
+      .post('/auth/register')
+      .send({ email: 'alice@example.com', name: 'Alice', password: 'secret123' })
+    expect(res.status).toBe(201)
+    expect(res.body.clearanceLevelName).toBe('none')
+  })
+
+  it('returns 400 for unrecognised clearanceLevelName', async () => {
+    const res = await request(app)
+      .post('/auth/register')
+      .send({ email: 'alice@example.com', name: 'Alice', password: 'secret123', clearanceLevelName: 'ultraclassified' })
+    expect(res.status).toBe(400)
+    expect(res.body).toEqual({ error: 'invalid clearance level' })
+  })
 })
 
 describe('POST /auth/login', () => {
   beforeEach(async () => {
     await request(app)
       .post('/auth/register')
-      .send({ email: 'alice@example.com', name: 'Alice', password: 'secret123' })
+      .send({ email: 'alice@example.com', name: 'Alice', password: 'secret123', clearanceLevelName: 'none' })
   })
 
   it('returns a token with valid credentials', async () => {
@@ -72,6 +97,16 @@ describe('POST /auth/login', () => {
       .send({ email: 'nobody@example.com', password: 'secret123' })
     expect(res.status).toBe(401)
     expect(res.body).toEqual({ error: 'Invalid credentials' })
+  })
+
+  it('token payload contains clearanceLevelRank', async () => {
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ email: 'alice@example.com', password: 'secret123' })
+    expect(res.status).toBe(200)
+    const decoded = jwt.decode(res.body.token)
+    expect(typeof decoded.clearanceLevelRank).toBe('number')
+    expect(decoded.clearanceLevelRank).toBe(1)
   })
 })
 
