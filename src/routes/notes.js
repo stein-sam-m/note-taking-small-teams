@@ -22,7 +22,10 @@ router.get('/user/:email/category/:categoryName', async (req, res, next) => {
     }
     const notes = await prisma.note.findMany({
       where: { userId: user.id, categoryId: category.id },
-      include: { user: true, category: true }
+      include: {
+        user: { select: { id: true, email: true, name: true, createdAt: true } },
+        category: true
+      }
     })
     res.json(notes)
   } catch (err) {
@@ -39,7 +42,10 @@ router.get('/user/:email', async (req, res, next) => {
     }
     const notes = await prisma.note.findMany({
       where: { userId: user.id },
-      include: { user: true, category: true }
+      include: {
+        user: { select: { id: true, email: true, name: true, createdAt: true } },
+        category: true
+      }
     })
     res.json(notes)
   } catch (err) {
@@ -60,7 +66,10 @@ router.get('/category/:categoryName', async (req, res, next) => {
     }
     const notes = await prisma.note.findMany({
       where: { categoryId: category.id },
-      include: { user: true, category: true }
+      include: {
+        user: { select: { id: true, email: true, name: true, createdAt: true } },
+        category: true
+      }
     })
     res.json(notes)
   } catch (err) {
@@ -79,7 +88,10 @@ router.get('/:id', async (req, res, next) => {
     }
     const note = await prisma.note.findUnique({
       where: { id },
-      include: { user: true, category: true }
+      include: {
+        user: { select: { id: true, email: true, name: true, createdAt: true } },
+        category: true
+      }
     })
     if (!note) {
       const err = new Error('Note not found')
@@ -119,7 +131,10 @@ router.post('/', async (req, res, next) => {
 
     const note = await prisma.note.create({
       data: { title, body, userId: user.id, categoryId: category.id },
-      include: { user: true, category: true }
+      include: {
+        user: { select: { id: true, email: true, name: true, createdAt: true } },
+        category: true
+      }
     })
 
     res.status(201).json(note)
