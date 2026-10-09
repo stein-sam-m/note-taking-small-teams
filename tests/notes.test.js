@@ -6,14 +6,18 @@ const notesRouter = require('../src/routes/notes')
 
 let engineeringCategoryId
 let token
+let noneClearanceLevelId
 
 beforeAll(async () => {
   const cat = await prisma.category.findUnique({ where: { name: 'engineering' } })
   engineeringCategoryId = cat.id
 
+  const cl = await prisma.clearanceLevel.findUnique({ where: { name: 'none' } })
+  noneClearanceLevelId = cl.id
+
   await request(app)
     .post('/auth/register')
-    .send({ email: 'testauth@example.com', name: 'Test Auth', password: 'testpass123' })
+    .send({ email: 'testauth@example.com', name: 'Test Auth', password: 'testpass123', clearanceLevelName: 'none' })
   const res = await request(app)
     .post('/auth/login')
     .send({ email: 'testauth@example.com', password: 'testpass123' })
@@ -120,6 +124,19 @@ describe('POST /notes', () => {
     expect(res.status).toBe(404)
     expect(res.body).toEqual({ error: 'Category not found or inactive' })
   })
+
+  it('stamps the note with the authenticated user\'s clearance level', async () => {
+    const res = await request(app)
+      .post('/notes')
+      .set('Authorization', `Bearer ${token}`)
+      .send(validPayload())
+    expect(res.status).toBe(201)
+    const noteInDb = await prisma.note.findUnique({
+      where: { id: res.body.id },
+      include: { clearanceLevel: true }
+    })
+    expect(noteInDb.clearanceLevel.name).toBe('none')
+  })
 })
 
 describe('GET /notes/:id', () => {
@@ -159,7 +176,7 @@ describe('PATCH /notes/:id', () => {
   let editToken
 
   beforeEach(async () => {
-    await request(app).post('/auth/register').send({ email: 'editor@example.com', name: 'Editor', password: 'pass123' })
+    await request(app).post('/auth/register').send({ email: 'editor@example.com', name: 'Editor', password: 'pass123', clearanceLevelName: 'none' })
     const res = await request(app).post('/auth/login').send({ email: 'editor@example.com', password: 'pass123' })
     editToken = res.body.token
   })
@@ -219,9 +236,9 @@ describe('PATCH /notes/:id', () => {
   })
 
   it('returns 403 when trying to edit another user\'s note', async () => {
-    const other = await prisma.user.create({ data: { email: 'other2@example.com', name: 'Other' } })
+    const other = await prisma.user.create({ data: { email: 'other2@example.com', name: 'Other', clearanceLevelId: noneClearanceLevelId } })
     const note = await prisma.note.create({
-      data: { title: 'Not Mine', body: 'Body', userId: other.id, categoryId: engineeringCategoryId }
+      data: { title: 'Not Mine', body: 'Body', userId: other.id, categoryId: engineeringCategoryId, clearanceLevelId: noneClearanceLevelId }
     })
     const res = await request(app)
       .patch(`/notes/${note.id}`)
@@ -247,7 +264,7 @@ describe('DELETE /notes/:id', () => {
   beforeEach(async () => {
     // Register a fresh user each test so the JWT user ID matches the note owner.
     // The outer beforeEach deletes all users first, then this creates a new one.
-    await request(app).post('/auth/register').send({ email: 'deleter@example.com', name: 'Deleter', password: 'pass123' })
+    await request(app).post('/auth/register').send({ email: 'deleter@example.com', name: 'Deleter', password: 'pass123', clearanceLevelName: 'none' })
     const res = await request(app).post('/auth/login').send({ email: 'deleter@example.com', password: 'pass123' })
     deleteToken = res.body.token
   })
@@ -276,9 +293,9 @@ describe('DELETE /notes/:id', () => {
   })
 
   it('returns 403 when trying to delete another user\'s note', async () => {
-    const other = await prisma.user.create({ data: { email: 'other@example.com', name: 'Other' } })
+    const other = await prisma.user.create({ data: { email: 'other@example.com', name: 'Other', clearanceLevelId: noneClearanceLevelId } })
     const note = await prisma.note.create({
-      data: { title: 'Not Mine', body: 'Body', userId: other.id, categoryId: engineeringCategoryId }
+      data: { title: 'Not Mine', body: 'Body', userId: other.id, categoryId: engineeringCategoryId, clearanceLevelId: noneClearanceLevelId }
     })
     const res = await request(app)
       .delete(`/notes/${note.id}`)
@@ -323,11 +340,11 @@ describe('GET /notes/user/:email', () => {
   })
 
   it('respects ?limit and returns at most that many notes', async () => {
-    const user = await prisma.user.create({ data: { email: 'carol@example.com', name: 'Carol' } })
+    const user = await prisma.user.create({ data: { email: 'carol@example.com', name: 'Carol', clearanceLevelId: noneClearanceLevelId } })
     await prisma.note.createMany({ data: [
-      { title: 'Note 1', body: 'Body', userId: user.id, categoryId: engineeringCategoryId },
-      { title: 'Note 2', body: 'Body', userId: user.id, categoryId: engineeringCategoryId },
-      { title: 'Note 3', body: 'Body', userId: user.id, categoryId: engineeringCategoryId }
+      { title: 'Note 1', body: 'Body', userId: user.id, categoryId: engineeringCategoryId, clearanceLevelId: noneClearanceLevelId },
+      { title: 'Note 2', body: 'Body', userId: user.id, categoryId: engineeringCategoryId, clearanceLevelId: noneClearanceLevelId },
+      { title: 'Note 3', body: 'Body', userId: user.id, categoryId: engineeringCategoryId, clearanceLevelId: noneClearanceLevelId }
     ]})
     const res = await request(app)
       .get('/notes/user/carol@example.com?limit=2')
@@ -337,11 +354,11 @@ describe('GET /notes/user/:email', () => {
   })
 
   it('respects ?offset and skips that many notes', async () => {
-    const user = await prisma.user.create({ data: { email: 'carol@example.com', name: 'Carol' } })
+    const user = await prisma.user.create({ data: { email: 'carol@example.com', name: 'Carol', clearanceLevelId: noneClearanceLevelId } })
     await prisma.note.createMany({ data: [
-      { title: 'Note 1', body: 'Body', userId: user.id, categoryId: engineeringCategoryId },
-      { title: 'Note 2', body: 'Body', userId: user.id, categoryId: engineeringCategoryId },
-      { title: 'Note 3', body: 'Body', userId: user.id, categoryId: engineeringCategoryId }
+      { title: 'Note 1', body: 'Body', userId: user.id, categoryId: engineeringCategoryId, clearanceLevelId: noneClearanceLevelId },
+      { title: 'Note 2', body: 'Body', userId: user.id, categoryId: engineeringCategoryId, clearanceLevelId: noneClearanceLevelId },
+      { title: 'Note 3', body: 'Body', userId: user.id, categoryId: engineeringCategoryId, clearanceLevelId: noneClearanceLevelId }
     ]})
     const res = await request(app)
       .get('/notes/user/carol@example.com?limit=10&offset=2')

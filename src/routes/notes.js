@@ -258,14 +258,25 @@ router.post('/', noteSubmitLimiter, async (req, res, next) => {
       return next(err)
     }
 
+    const noneLevel = await prisma.clearanceLevel.findUnique({ where: { name: 'none' } })
+
     const user = await prisma.user.upsert({
       where: { email },
       update: {},
-      create: { email, name }
+      create: { email, name, clearanceLevelId: noneLevel.id }
+    })
+
+    const creatorLevel = await prisma.clearanceLevel.findFirst({
+      where: { rank: req.user.clearanceLevelRank }
     })
 
     const note = await prisma.note.create({
-      data: { title, body, userId: user.id, categoryId: category.id },
+      data: {
+        title, body,
+        userId: user.id,
+        categoryId: category.id,
+        clearanceLevelId: creatorLevel ? creatorLevel.id : noneLevel.id
+      },
       include: {
         user: { select: { id: true, email: true, name: true, createdAt: true } },
         category: true
