@@ -310,12 +310,18 @@ router.post('/', noteSubmitLimiter, async (req, res, next) => {
       where: { rank: req.user.clearanceLevelRank }
     })
 
+    if (!creatorLevel) {
+      const err = new Error('creator clearance level not found')
+      err.status = 500
+      return next(err)
+    }
+
     const note = await prisma.note.create({
       data: {
         title, body,
         userId: user.id,
         categoryId: category.id,
-        clearanceLevelId: creatorLevel ? creatorLevel.id : noneLevel.id
+        clearanceLevelId: creatorLevel.id
       },
       include: {
         user: { select: { id: true, email: true, name: true, createdAt: true } },
