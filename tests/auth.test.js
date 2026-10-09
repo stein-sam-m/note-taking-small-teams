@@ -74,3 +74,25 @@ describe('POST /auth/login', () => {
     expect(res.body).toEqual({ error: 'Invalid credentials' })
   })
 })
+
+describe('Protected routes — no token', () => {
+  it('returns 401 on GET /categories without token', async () => {
+    const res = await request(app).get('/categories')
+    expect(res.status).toBe(401)
+    expect(res.body).toEqual({ error: 'Unauthorized' })
+  })
+
+  it('returns 401 on POST /notes without token', async () => {
+    const res = await request(app).post('/notes').send({})
+    expect(res.status).toBe(401)
+    expect(res.body).toEqual({ error: 'Unauthorized' })
+  })
+
+  it('returns 401 with a malformed token', async () => {
+    const res = await request(app)
+      .get('/categories')
+      .set('Authorization', 'Bearer notavalidtoken')
+    expect(res.status).toBe(401)
+    expect(res.body).toEqual({ error: 'Unauthorized' })
+  })
+})

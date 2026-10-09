@@ -3,14 +3,15 @@ const express = require('express')
 const authRouter = require('./routes/auth')
 const categoriesRouter = require('./routes/categories')
 const notesRouter = require('./routes/notes')
+const authenticate = require('./middleware/authenticate')
 const errorHandler = require('./middleware/errorHandler')
 
 const app = express()
 app.use(express.json())
 
 app.use('/auth', authRouter)
-app.use('/', categoriesRouter)
-app.use('/notes', notesRouter)
+app.use('/', authenticate, categoriesRouter)
+app.use('/notes', authenticate, notesRouter)
 
 app.use(errorHandler)
 

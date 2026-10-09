@@ -3,10 +3,19 @@ const app = require('../src/index')
 const prisma = require('../src/lib/prisma')
 
 let engineeringCategoryId
+let token
 
 beforeAll(async () => {
   const cat = await prisma.category.findUnique({ where: { name: 'engineering' } })
   engineeringCategoryId = cat.id
+
+  await request(app)
+    .post('/auth/register')
+    .send({ email: 'testauth@example.com', name: 'Test Auth', password: 'testpass123' })
+  const res = await request(app)
+    .post('/auth/login')
+    .send({ email: 'testauth@example.com', password: 'testpass123' })
+  token = res.body.token
 })
 
 beforeEach(async () => {
@@ -28,7 +37,10 @@ describe('POST /notes', () => {
   })
 
   it('creates a note and returns 201 with full note object', async () => {
-    const res = await request(app).post('/notes').send(validPayload())
+    const res = await request(app)
+      .post('/notes')
+      .set('Authorization', `Bearer ${token}`)
+      .send(validPayload())
     expect(res.status).toBe(201)
     expect(res.body).toMatchObject({
       title: 'First Note',
@@ -40,21 +52,27 @@ describe('POST /notes', () => {
   })
 
   it('creates a new user if email is new', async () => {
-    await request(app).post('/notes').send(validPayload())
+    await request(app)
+      .post('/notes')
+      .set('Authorization', `Bearer ${token}`)
+      .send(validPayload())
     const user = await prisma.user.findUnique({ where: { email: 'alice@example.com' } })
     expect(user).not.toBeNull()
     expect(user.name).toBe('Alice')
   })
 
   it('reuses existing user if email already exists', async () => {
-    await request(app).post('/notes').send(validPayload())
-    await request(app).post('/notes').send({ ...validPayload(), title: 'Second Note' })
+    await request(app).post('/notes').set('Authorization', `Bearer ${token}`).send(validPayload())
+    await request(app).post('/notes').set('Authorization', `Bearer ${token}`).send({ ...validPayload(), title: 'Second Note' })
     const users = await prisma.user.findMany({ where: { email: 'alice@example.com' } })
     expect(users.length).toBe(1)
   })
 
   it('returns 400 when required fields are missing', async () => {
-    const res = await request(app).post('/notes').send({ email: 'alice@example.com' })
+    const res = await request(app)
+      .post('/notes')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ email: 'alice@example.com' })
     expect(res.status).toBe(400)
     expect(res.body).toEqual({ error: 'email, name, title, body, and categoryId are required' })
   })
@@ -62,6 +80,7 @@ describe('POST /notes', () => {
   it('returns 404 when categoryId does not exist', async () => {
     const res = await request(app)
       .post('/notes')
+      .set('Authorization', `Bearer ${token}`)
       .send({ ...validPayload(), categoryId: '00000000-0000-0000-0000-000000000000' })
     expect(res.status).toBe(404)
     expect(res.body).toEqual({ error: 'Category not found or inactive' })
@@ -70,14 +89,19 @@ describe('POST /notes', () => {
 
 describe('GET /notes/:id', () => {
   it('returns a note by id', async () => {
-    const created = await request(app).post('/notes').send({
-      email: 'bob@example.com',
-      name: 'Bob',
-      title: 'My Note',
-      body: 'Content here',
-      categoryId: engineeringCategoryId
-    })
-    const res = await request(app).get(`/notes/${created.body.id}`)
+    const created = await request(app)
+      .post('/notes')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        email: 'bob@example.com',
+        name: 'Bob',
+        title: 'My Note',
+        body: 'Content here',
+        categoryId: engineeringCategoryId
+      })
+    const res = await request(app)
+      .get(`/notes/${created.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
     expect(res.status).toBe(200)
     expect(res.body).toMatchObject({
       id: created.body.id,
@@ -88,7 +112,9 @@ describe('GET /notes/:id', () => {
   })
 
   it('returns 404 for unknown id', async () => {
-    const res = await request(app).get('/notes/00000000-0000-0000-0000-000000000000')
+    const res = await request(app)
+      .get('/notes/00000000-0000-0000-0000-000000000000')
+      .set('Authorization', `Bearer ${token}`)
     expect(res.status).toBe(404)
     expect(res.body).toEqual({ error: 'Note not found' })
   })
@@ -96,22 +122,26 @@ describe('GET /notes/:id', () => {
 
 describe('GET /notes/user/:email', () => {
   it('returns all notes for a user', async () => {
-    await request(app).post('/notes').send({
+    await request(app).post('/notes').set('Authorization', `Bearer ${token}`).send({
       email: 'carol@example.com', name: 'Carol',
       title: 'Note A', body: 'Body A', categoryId: engineeringCategoryId
     })
-    await request(app).post('/notes').send({
+    await request(app).post('/notes').set('Authorization', `Bearer ${token}`).send({
       email: 'carol@example.com', name: 'Carol',
       title: 'Note B', body: 'Body B', categoryId: engineeringCategoryId
     })
-    const res = await request(app).get('/notes/user/carol@example.com')
+    const res = await request(app)
+      .get('/notes/user/carol@example.com')
+      .set('Authorization', `Bearer ${token}`)
     expect(res.status).toBe(200)
     expect(res.body.length).toBe(2)
     expect(res.body[0]).toMatchObject({ user: { email: 'carol@example.com' } })
   })
 
   it('returns empty array for user with no notes', async () => {
-    const res = await request(app).get('/notes/user/nobody@example.com')
+    const res = await request(app)
+      .get('/notes/user/nobody@example.com')
+      .set('Authorization', `Bearer ${token}`)
     expect(res.status).toBe(200)
     expect(res.body).toEqual([])
   })
@@ -119,18 +149,22 @@ describe('GET /notes/user/:email', () => {
 
 describe('GET /notes/category/:categoryName', () => {
   it('returns all notes in a category', async () => {
-    await request(app).post('/notes').send({
+    await request(app).post('/notes').set('Authorization', `Bearer ${token}`).send({
       email: 'dave@example.com', name: 'Dave',
       title: 'Eng Note', body: 'Body', categoryId: engineeringCategoryId
     })
-    const res = await request(app).get('/notes/category/engineering')
+    const res = await request(app)
+      .get('/notes/category/engineering')
+      .set('Authorization', `Bearer ${token}`)
     expect(res.status).toBe(200)
     expect(res.body.length).toBeGreaterThanOrEqual(1)
     expect(res.body[0]).toMatchObject({ category: { name: 'engineering' } })
   })
 
   it('returns 404 for unknown category', async () => {
-    const res = await request(app).get('/notes/category/nonexistent')
+    const res = await request(app)
+      .get('/notes/category/nonexistent')
+      .set('Authorization', `Bearer ${token}`)
     expect(res.status).toBe(404)
     expect(res.body).toEqual({ error: 'Category not found' })
   })
@@ -138,11 +172,13 @@ describe('GET /notes/category/:categoryName', () => {
 
 describe('GET /notes/user/:email/category/:categoryName', () => {
   it('returns notes filtered by user and category', async () => {
-    await request(app).post('/notes').send({
+    await request(app).post('/notes').set('Authorization', `Bearer ${token}`).send({
       email: 'eve@example.com', name: 'Eve',
       title: 'Eng Note', body: 'Body', categoryId: engineeringCategoryId
     })
-    const res = await request(app).get('/notes/user/eve@example.com/category/engineering')
+    const res = await request(app)
+      .get('/notes/user/eve@example.com/category/engineering')
+      .set('Authorization', `Bearer ${token}`)
     expect(res.status).toBe(200)
     expect(res.body.length).toBe(1)
     expect(res.body[0]).toMatchObject({
@@ -153,7 +189,9 @@ describe('GET /notes/user/:email/category/:categoryName', () => {
   })
 
   it('returns empty array when no matching notes', async () => {
-    const res = await request(app).get('/notes/user/eve@example.com/category/sales')
+    const res = await request(app)
+      .get('/notes/user/eve@example.com/category/sales')
+      .set('Authorization', `Bearer ${token}`)
     expect(res.status).toBe(200)
     expect(res.body).toEqual([])
   })
