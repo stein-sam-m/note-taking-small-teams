@@ -13,12 +13,27 @@ const noteSubmitLimiter = rateLimit({
 
 const router = Router()
 
+function parsePagination(query) {
+  const limit = parseInt(query.limit ?? '50', 10)
+  const offset = parseInt(query.offset ?? '0', 10)
+  if (isNaN(limit) || limit < 1 || isNaN(offset) || offset < 0) {
+    return { err: true }
+  }
+  return { limit: Math.min(limit, 200), offset }
+}
+
 // IMPORTANT: These three routes must come before router.get('/:id')
 // because Express matches routes in definition order and /:id would
 // match the literal strings "user" and "category".
 
 router.get('/user/:email/category/:categoryName', async (req, res, next) => {
   try {
+    const { limit, offset, err: pageErr } = parsePagination(req.query)
+    if (pageErr) {
+      const err = new Error('limit must be a positive integer and offset must be a non-negative integer')
+      err.status = 400
+      return next(err)
+    }
     const { email, categoryName } = req.params
     const category = await prisma.category.findFirst({
       where: { name: categoryName, isActive: true }
@@ -35,7 +50,10 @@ router.get('/user/:email/category/:categoryName', async (req, res, next) => {
       include: {
         user: { select: { id: true, email: true, name: true, createdAt: true } },
         category: true
-      }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: offset
     })
     res.json(notes)
   } catch (err) {
@@ -45,6 +63,12 @@ router.get('/user/:email/category/:categoryName', async (req, res, next) => {
 
 router.get('/user/:email', async (req, res, next) => {
   try {
+    const { limit, offset, err: pageErr } = parsePagination(req.query)
+    if (pageErr) {
+      const err = new Error('limit must be a positive integer and offset must be a non-negative integer')
+      err.status = 400
+      return next(err)
+    }
     const { email } = req.params
     const user = await prisma.user.findUnique({ where: { email } })
     if (!user) {
@@ -55,7 +79,10 @@ router.get('/user/:email', async (req, res, next) => {
       include: {
         user: { select: { id: true, email: true, name: true, createdAt: true } },
         category: true
-      }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: offset
     })
     res.json(notes)
   } catch (err) {
@@ -65,6 +92,12 @@ router.get('/user/:email', async (req, res, next) => {
 
 router.get('/category/:categoryName', async (req, res, next) => {
   try {
+    const { limit, offset, err: pageErr } = parsePagination(req.query)
+    if (pageErr) {
+      const err = new Error('limit must be a positive integer and offset must be a non-negative integer')
+      err.status = 400
+      return next(err)
+    }
     const { categoryName } = req.params
     const category = await prisma.category.findFirst({
       where: { name: categoryName, isActive: true }
@@ -79,7 +112,10 @@ router.get('/category/:categoryName', async (req, res, next) => {
       include: {
         user: { select: { id: true, email: true, name: true, createdAt: true } },
         category: true
-      }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: offset
     })
     res.json(notes)
   } catch (err) {

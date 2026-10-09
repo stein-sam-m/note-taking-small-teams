@@ -180,6 +180,57 @@ describe('GET /notes/user/:email', () => {
     expect(res.status).toBe(200)
     expect(res.body).toEqual([])
   })
+
+  it('respects ?limit and returns at most that many notes', async () => {
+    const user = await prisma.user.create({ data: { email: 'carol@example.com', name: 'Carol' } })
+    await prisma.note.createMany({ data: [
+      { title: 'Note 1', body: 'Body', userId: user.id, categoryId: engineeringCategoryId },
+      { title: 'Note 2', body: 'Body', userId: user.id, categoryId: engineeringCategoryId },
+      { title: 'Note 3', body: 'Body', userId: user.id, categoryId: engineeringCategoryId }
+    ]})
+    const res = await request(app)
+      .get('/notes/user/carol@example.com?limit=2')
+      .set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(200)
+    expect(res.body.length).toBe(2)
+  })
+
+  it('respects ?offset and skips that many notes', async () => {
+    const user = await prisma.user.create({ data: { email: 'carol@example.com', name: 'Carol' } })
+    await prisma.note.createMany({ data: [
+      { title: 'Note 1', body: 'Body', userId: user.id, categoryId: engineeringCategoryId },
+      { title: 'Note 2', body: 'Body', userId: user.id, categoryId: engineeringCategoryId },
+      { title: 'Note 3', body: 'Body', userId: user.id, categoryId: engineeringCategoryId }
+    ]})
+    const res = await request(app)
+      .get('/notes/user/carol@example.com?limit=10&offset=2')
+      .set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(200)
+    expect(res.body.length).toBe(1)
+  })
+
+  it('caps limit at 200 when a larger value is given', async () => {
+    const res = await request(app)
+      .get('/notes/user/carol@example.com?limit=999')
+      .set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(200)
+  })
+
+  it('returns 400 for a non-integer limit', async () => {
+    const res = await request(app)
+      .get('/notes/user/carol@example.com?limit=abc')
+      .set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(400)
+    expect(res.body).toEqual({ error: 'limit must be a positive integer and offset must be a non-negative integer' })
+  })
+
+  it('returns 400 for a negative offset', async () => {
+    const res = await request(app)
+      .get('/notes/user/carol@example.com?offset=-1')
+      .set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(400)
+    expect(res.body).toEqual({ error: 'limit must be a positive integer and offset must be a non-negative integer' })
+  })
 })
 
 describe('GET /notes/category/:categoryName', () => {
