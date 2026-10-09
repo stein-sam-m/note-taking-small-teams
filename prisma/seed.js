@@ -1,5 +1,7 @@
 require('dotenv').config()
 const { PrismaClient } = require('@prisma/client')
+const bcrypt = require('bcrypt')
+
 const prisma = new PrismaClient()
 
 async function main() {
@@ -12,6 +14,18 @@ async function main() {
     })
   }
   console.log('Seeded categories:', categories.join(', '))
+
+  const demoPassword = await bcrypt.hash('demo123', 10)
+  await prisma.user.upsert({
+    where: { email: 'demo@example.com' },
+    update: {},
+    create: {
+      email: 'demo@example.com',
+      name: 'Demo User',
+      password: demoPassword
+    }
+  })
+  console.log('Seeded demo user: demo@example.com / demo123')
 }
 
 main()
