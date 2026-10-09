@@ -155,6 +155,92 @@ describe('GET /notes/:id', () => {
   })
 })
 
+describe('PATCH /notes/:id', () => {
+  let editToken
+
+  beforeEach(async () => {
+    await request(app).post('/auth/register').send({ email: 'editor@example.com', name: 'Editor', password: 'pass123' })
+    const res = await request(app).post('/auth/login').send({ email: 'editor@example.com', password: 'pass123' })
+    editToken = res.body.token
+  })
+
+  it('updates title and returns 200 with updated note', async () => {
+    const created = await request(app)
+      .post('/notes')
+      .set('Authorization', `Bearer ${editToken}`)
+      .send({ email: 'editor@example.com', name: 'Editor', title: 'Old Title', body: 'Body', categoryId: engineeringCategoryId })
+    const res = await request(app)
+      .patch(`/notes/${created.body.id}`)
+      .set('Authorization', `Bearer ${editToken}`)
+      .send({ title: 'New Title' })
+    expect(res.status).toBe(200)
+    expect(res.body.title).toBe('New Title')
+    expect(res.body.body).toBe('Body')
+  })
+
+  it('updates body and returns 200 with updated note', async () => {
+    const created = await request(app)
+      .post('/notes')
+      .set('Authorization', `Bearer ${editToken}`)
+      .send({ email: 'editor@example.com', name: 'Editor', title: 'Title', body: 'Old Body', categoryId: engineeringCategoryId })
+    const res = await request(app)
+      .patch(`/notes/${created.body.id}`)
+      .set('Authorization', `Bearer ${editToken}`)
+      .send({ body: 'New Body' })
+    expect(res.status).toBe(200)
+    expect(res.body.body).toBe('New Body')
+    expect(res.body.title).toBe('Title')
+  })
+
+  it('returns 400 when neither title nor body is provided', async () => {
+    const created = await request(app)
+      .post('/notes')
+      .set('Authorization', `Bearer ${editToken}`)
+      .send({ email: 'editor@example.com', name: 'Editor', title: 'Title', body: 'Body', categoryId: engineeringCategoryId })
+    const res = await request(app)
+      .patch(`/notes/${created.body.id}`)
+      .set('Authorization', `Bearer ${editToken}`)
+      .send({})
+    expect(res.status).toBe(400)
+    expect(res.body).toEqual({ error: 'at least one of title or body is required' })
+  })
+
+  it('returns 400 when updated title exceeds 200 characters', async () => {
+    const created = await request(app)
+      .post('/notes')
+      .set('Authorization', `Bearer ${editToken}`)
+      .send({ email: 'editor@example.com', name: 'Editor', title: 'Title', body: 'Body', categoryId: engineeringCategoryId })
+    const res = await request(app)
+      .patch(`/notes/${created.body.id}`)
+      .set('Authorization', `Bearer ${editToken}`)
+      .send({ title: 'a'.repeat(201) })
+    expect(res.status).toBe(400)
+    expect(res.body).toEqual({ error: 'title must be 200 characters or fewer' })
+  })
+
+  it('returns 403 when trying to edit another user\'s note', async () => {
+    const other = await prisma.user.create({ data: { email: 'other2@example.com', name: 'Other' } })
+    const note = await prisma.note.create({
+      data: { title: 'Not Mine', body: 'Body', userId: other.id, categoryId: engineeringCategoryId }
+    })
+    const res = await request(app)
+      .patch(`/notes/${note.id}`)
+      .set('Authorization', `Bearer ${editToken}`)
+      .send({ title: 'Hacked' })
+    expect(res.status).toBe(403)
+    expect(res.body).toEqual({ error: 'Forbidden' })
+  })
+
+  it('returns 404 for unknown note id', async () => {
+    const res = await request(app)
+      .patch('/notes/00000000-0000-0000-0000-000000000000')
+      .set('Authorization', `Bearer ${editToken}`)
+      .send({ title: 'x' })
+    expect(res.status).toBe(404)
+    expect(res.body).toEqual({ error: 'Note not found' })
+  })
+})
+
 describe('DELETE /notes/:id', () => {
   let deleteToken
 

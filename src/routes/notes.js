@@ -150,6 +150,56 @@ router.get('/:id', async (req, res, next) => {
   }
 })
 
+router.patch('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!UUID_RE.test(id)) {
+      const err = new Error('Note not found')
+      err.status = 404
+      return next(err)
+    }
+    const { title, body } = req.body
+    if (!title && !body) {
+      const err = new Error('at least one of title or body is required')
+      err.status = 400
+      return next(err)
+    }
+    if (title && title.length > 200) {
+      const err = new Error('title must be 200 characters or fewer')
+      err.status = 400
+      return next(err)
+    }
+    if (body && body.length > 10000) {
+      const err = new Error('body must be 10000 characters or fewer')
+      err.status = 400
+      return next(err)
+    }
+    const note = await prisma.note.findUnique({ where: { id } })
+    if (!note || note.deletedAt) {
+      const err = new Error('Note not found')
+      err.status = 404
+      return next(err)
+    }
+    if (note.userId !== req.user.id) {
+      const err = new Error('Forbidden')
+      err.status = 403
+      return next(err)
+    }
+    const updated = await prisma.note.update({
+      where: { id },
+      data: { ...(title && { title }), ...(body && { body }) },
+      include: {
+        user: { select: { id: true, email: true, name: true, createdAt: true } },
+        category: true
+      }
+    })
+    res.json(updated)
+  } catch (err) {
+    next(err)
+  }
+})
+
 router.delete('/:id', async (req, res, next) => {
   try {
     const { id } = req.params
