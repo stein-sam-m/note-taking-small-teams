@@ -14,7 +14,8 @@ router.get('/categories', async (req, res, next) => {
 
 router.post('/admin/categories', async (req, res, next) => {
   try {
-    const { name } = req.body
+    let { name } = req.body
+    name = name ? name.trim() : name
     if (!name) {
       const err = new Error('name is required')
       err.status = 400

@@ -71,6 +71,12 @@ router.get('/category/:categoryName', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const { id } = req.params
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!UUID_RE.test(id)) {
+      const err = new Error('Note not found')
+      err.status = 404
+      return next(err)
+    }
     const note = await prisma.note.findUnique({
       where: { id },
       include: { user: true, category: true }
@@ -105,10 +111,11 @@ router.post('/', async (req, res, next) => {
       return next(err)
     }
 
-    let user = await prisma.user.findUnique({ where: { email } })
-    if (!user) {
-      user = await prisma.user.create({ data: { email, name } })
-    }
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: {},
+      create: { email, name }
+    })
 
     const note = await prisma.note.create({
       data: { title, body, userId: user.id, categoryId: category.id },

@@ -24,13 +24,15 @@ describe('GET /categories', () => {
 
 describe('POST /admin/categories', () => {
   it('creates a new category and returns 201', async () => {
-    const res = await request(app)
-      .post('/admin/categories')
-      .send({ name: 'legal' })
-    expect(res.status).toBe(201)
-    expect(res.body).toMatchObject({ name: 'legal', isActive: true })
-
-    await prisma.category.delete({ where: { name: 'legal' } })
+    try {
+      const res = await request(app)
+        .post('/admin/categories')
+        .send({ name: 'legal' })
+      expect(res.status).toBe(201)
+      expect(res.body).toMatchObject({ name: 'legal', isActive: true })
+    } finally {
+      await prisma.category.deleteMany({ where: { name: 'legal' } })
+    }
   })
 
   it('returns 400 when name is missing', async () => {

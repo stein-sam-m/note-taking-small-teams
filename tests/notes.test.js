@@ -79,7 +79,12 @@ describe('GET /notes/:id', () => {
     })
     const res = await request(app).get(`/notes/${created.body.id}`)
     expect(res.status).toBe(200)
-    expect(res.body).toMatchObject({ id: created.body.id, title: 'My Note' })
+    expect(res.body).toMatchObject({
+      id: created.body.id,
+      title: 'My Note',
+      user: { email: 'bob@example.com' },
+      category: { name: 'engineering' }
+    })
   })
 
   it('returns 404 for unknown id', async () => {
