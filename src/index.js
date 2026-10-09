@@ -1,5 +1,6 @@
 require('dotenv').config()
 const express = require('express')
+const authRouter = require('./routes/auth')
 const categoriesRouter = require('./routes/categories')
 const notesRouter = require('./routes/notes')
 const errorHandler = require('./middleware/errorHandler')
@@ -7,6 +8,7 @@ const errorHandler = require('./middleware/errorHandler')
 const app = express()
 app.use(express.json())
 
+app.use('/auth', authRouter)
 app.use('/', categoriesRouter)
 app.use('/notes', notesRouter)
 
