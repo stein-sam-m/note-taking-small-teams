@@ -155,6 +155,61 @@ describe('GET /notes/:id', () => {
   })
 })
 
+describe('DELETE /notes/:id', () => {
+  let deleteToken
+
+  beforeEach(async () => {
+    // Register a fresh user each test so the JWT user ID matches the note owner.
+    // The outer beforeEach deletes all users first, then this creates a new one.
+    await request(app).post('/auth/register').send({ email: 'deleter@example.com', name: 'Deleter', password: 'pass123' })
+    const res = await request(app).post('/auth/login').send({ email: 'deleter@example.com', password: 'pass123' })
+    deleteToken = res.body.token
+  })
+
+  it('soft-deletes own note and returns 204', async () => {
+    const created = await request(app)
+      .post('/notes')
+      .set('Authorization', `Bearer ${deleteToken}`)
+      .send({ email: 'deleter@example.com', name: 'Deleter', title: 'My Note', body: 'Body', categoryId: engineeringCategoryId })
+    const res = await request(app)
+      .delete(`/notes/${created.body.id}`)
+      .set('Authorization', `Bearer ${deleteToken}`)
+    expect(res.status).toBe(204)
+  })
+
+  it('deleted note no longer appears in GET /notes/:id', async () => {
+    const created = await request(app)
+      .post('/notes')
+      .set('Authorization', `Bearer ${deleteToken}`)
+      .send({ email: 'deleter@example.com', name: 'Deleter', title: 'My Note', body: 'Body', categoryId: engineeringCategoryId })
+    await request(app).delete(`/notes/${created.body.id}`).set('Authorization', `Bearer ${deleteToken}`)
+    const res = await request(app)
+      .get(`/notes/${created.body.id}`)
+      .set('Authorization', `Bearer ${deleteToken}`)
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 403 when trying to delete another user\'s note', async () => {
+    const other = await prisma.user.create({ data: { email: 'other@example.com', name: 'Other' } })
+    const note = await prisma.note.create({
+      data: { title: 'Not Mine', body: 'Body', userId: other.id, categoryId: engineeringCategoryId }
+    })
+    const res = await request(app)
+      .delete(`/notes/${note.id}`)
+      .set('Authorization', `Bearer ${deleteToken}`)
+    expect(res.status).toBe(403)
+    expect(res.body).toEqual({ error: 'Forbidden' })
+  })
+
+  it('returns 404 for unknown note id', async () => {
+    const res = await request(app)
+      .delete('/notes/00000000-0000-0000-0000-000000000000')
+      .set('Authorization', `Bearer ${deleteToken}`)
+    expect(res.status).toBe(404)
+    expect(res.body).toEqual({ error: 'Note not found' })
+  })
+})
+
 describe('GET /notes/user/:email', () => {
   it('returns all notes for a user', async () => {
     await request(app).post('/notes').set('Authorization', `Bearer ${token}`).send({

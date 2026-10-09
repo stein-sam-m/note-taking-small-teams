@@ -46,7 +46,7 @@ router.get('/user/:email/category/:categoryName', async (req, res, next) => {
       return res.json([])
     }
     const notes = await prisma.note.findMany({
-      where: { userId: user.id, categoryId: category.id },
+      where: { userId: user.id, categoryId: category.id, deletedAt: null },
       include: {
         user: { select: { id: true, email: true, name: true, createdAt: true } },
         category: true
@@ -75,7 +75,7 @@ router.get('/user/:email', async (req, res, next) => {
       return res.json([])
     }
     const notes = await prisma.note.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, deletedAt: null },
       include: {
         user: { select: { id: true, email: true, name: true, createdAt: true } },
         category: true
@@ -108,7 +108,7 @@ router.get('/category/:categoryName', async (req, res, next) => {
       return next(err)
     }
     const notes = await prisma.note.findMany({
-      where: { categoryId: category.id },
+      where: { categoryId: category.id, deletedAt: null },
       include: {
         user: { select: { id: true, email: true, name: true, createdAt: true } },
         category: true
@@ -139,12 +139,39 @@ router.get('/:id', async (req, res, next) => {
         category: true
       }
     })
-    if (!note) {
+    if (!note || note.deletedAt) {
       const err = new Error('Note not found')
       err.status = 404
       return next(err)
     }
     res.json(note)
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!UUID_RE.test(id)) {
+      const err = new Error('Note not found')
+      err.status = 404
+      return next(err)
+    }
+    const note = await prisma.note.findUnique({ where: { id } })
+    if (!note || note.deletedAt) {
+      const err = new Error('Note not found')
+      err.status = 404
+      return next(err)
+    }
+    if (note.userId !== req.user.id) {
+      const err = new Error('Forbidden')
+      err.status = 403
+      return next(err)
+    }
+    await prisma.note.update({ where: { id }, data: { deletedAt: new Date() } })
+    res.sendStatus(204)
   } catch (err) {
     next(err)
   }
