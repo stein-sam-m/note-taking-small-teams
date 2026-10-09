@@ -1,5 +1,15 @@
 const { Router } = require('express')
+const rateLimit = require('express-rate-limit')
 const prisma = require('../lib/prisma')
+
+const noteSubmitLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_MAX || '30', 10),
+  keyGenerator: (req) => req.user.id,
+  handler: (req, res) => res.status(429).json({ error: 'Too many requests' }),
+  standardHeaders: false,
+  legacyHeaders: false
+})
 
 const router = Router()
 
@@ -104,7 +114,7 @@ router.get('/:id', async (req, res, next) => {
   }
 })
 
-router.post('/', async (req, res, next) => {
+router.post('/', noteSubmitLimiter, async (req, res, next) => {
   try {
     const { email, name, title, body, categoryId } = req.body
 
@@ -155,4 +165,5 @@ router.post('/', async (req, res, next) => {
   }
 })
 
+router.limiter = noteSubmitLimiter
 module.exports = router

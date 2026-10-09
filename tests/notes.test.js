@@ -1,6 +1,8 @@
 const request = require('supertest')
+const jwt = require('jsonwebtoken')
 const app = require('../src/index')
 const prisma = require('../src/lib/prisma')
+const notesRouter = require('../src/routes/notes')
 
 let engineeringCategoryId
 let token
@@ -21,6 +23,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await prisma.note.deleteMany()
   await prisma.user.deleteMany()
+  const { id } = jwt.decode(token)
+  notesRouter.limiter.resetKey(id)
 })
 
 afterAll(async () => {
@@ -93,6 +97,19 @@ describe('POST /notes', () => {
       .send({ ...validPayload(), body: 'a'.repeat(10001) })
     expect(res.status).toBe(400)
     expect(res.body).toEqual({ error: 'body must be 10000 characters or fewer' })
+  })
+
+  it('returns 429 after exceeding rate limit', async () => {
+    const max = parseInt(process.env.RATE_LIMIT_MAX || '30', 10)
+    for (let i = 0; i < max; i++) {
+      await request(app).post('/notes').set('Authorization', `Bearer ${token}`).send(validPayload())
+    }
+    const res = await request(app)
+      .post('/notes')
+      .set('Authorization', `Bearer ${token}`)
+      .send(validPayload())
+    expect(res.status).toBe(429)
+    expect(res.body).toEqual({ error: 'Too many requests' })
   })
 
   it('returns 404 when categoryId does not exist', async () => {
