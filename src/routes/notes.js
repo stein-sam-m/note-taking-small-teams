@@ -114,6 +114,18 @@ router.post('/', async (req, res, next) => {
       return next(err)
     }
 
+    if (title.length > 200) {
+      const err = new Error('title must be 200 characters or fewer')
+      err.status = 400
+      return next(err)
+    }
+
+    if (body.length > 10000) {
+      const err = new Error('body must be 10000 characters or fewer')
+      err.status = 400
+      return next(err)
+    }
+
     const category = await prisma.category.findFirst({
       where: { id: categoryId, isActive: true }
     })

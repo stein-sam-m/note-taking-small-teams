@@ -77,6 +77,24 @@ describe('POST /notes', () => {
     expect(res.body).toEqual({ error: 'email, name, title, body, and categoryId are required' })
   })
 
+  it('returns 400 when title exceeds 200 characters', async () => {
+    const res = await request(app)
+      .post('/notes')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...validPayload(), title: 'a'.repeat(201) })
+    expect(res.status).toBe(400)
+    expect(res.body).toEqual({ error: 'title must be 200 characters or fewer' })
+  })
+
+  it('returns 400 when body exceeds 10000 characters', async () => {
+    const res = await request(app)
+      .post('/notes')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...validPayload(), body: 'a'.repeat(10001) })
+    expect(res.status).toBe(400)
+    expect(res.body).toEqual({ error: 'body must be 10000 characters or fewer' })
+  })
+
   it('returns 404 when categoryId does not exist', async () => {
     const res = await request(app)
       .post('/notes')
