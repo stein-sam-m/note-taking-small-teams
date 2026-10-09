@@ -7,13 +7,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model ClearanceLevel {
+  id    String @id @default(uuid())
+  name  String @unique
+  rank  Int    @unique
+  users User[]
+  notes Note[]
+}
+
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String
-  password  String?
-  createdAt DateTime @default(now())
-  notes     Note[]
+  id               String         @id @default(uuid())
+  email            String         @unique
+  name             String
+  password         String?
+  createdAt        DateTime       @default(now())
+  clearanceLevelId String
+  clearanceLevel   ClearanceLevel @relation(fields: [clearanceLevelId], references: [id])
+  notes            Note[]
 }
 
 model Category {
@@ -25,13 +35,15 @@ model Category {
 }
 
 model Note {
-  id         String    @id @default(uuid())
-  title      String
-  body       String
-  user       User      @relation(fields: [userId], references: [id])
-  userId     String
-  category   Category  @relation(fields: [categoryId], references: [id])
-  categoryId String
-  createdAt  DateTime  @default(now())
-  deletedAt  DateTime?
+  id               String         @id @default(uuid())
+  title            String
+  body             String
+  user             User           @relation(fields: [userId], references: [id])
+  userId           String
+  category         Category       @relation(fields: [categoryId], references: [id])
+  categoryId       String
+  createdAt        DateTime       @default(now())
+  deletedAt        DateTime?
+  clearanceLevelId String
+  clearanceLevel   ClearanceLevel @relation(fields: [clearanceLevelId], references: [id])
 }
