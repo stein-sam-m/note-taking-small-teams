@@ -67,3 +67,89 @@ describe('POST /notes', () => {
     expect(res.body).toEqual({ error: 'Category not found or inactive' })
   })
 })
+
+describe('GET /notes/:id', () => {
+  it('returns a note by id', async () => {
+    const created = await request(app).post('/notes').send({
+      email: 'bob@example.com',
+      name: 'Bob',
+      title: 'My Note',
+      body: 'Content here',
+      categoryId: engineeringCategoryId
+    })
+    const res = await request(app).get(`/notes/${created.body.id}`)
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ id: created.body.id, title: 'My Note' })
+  })
+
+  it('returns 404 for unknown id', async () => {
+    const res = await request(app).get('/notes/00000000-0000-0000-0000-000000000000')
+    expect(res.status).toBe(404)
+    expect(res.body).toEqual({ error: 'Note not found' })
+  })
+})
+
+describe('GET /notes/user/:email', () => {
+  it('returns all notes for a user', async () => {
+    await request(app).post('/notes').send({
+      email: 'carol@example.com', name: 'Carol',
+      title: 'Note A', body: 'Body A', categoryId: engineeringCategoryId
+    })
+    await request(app).post('/notes').send({
+      email: 'carol@example.com', name: 'Carol',
+      title: 'Note B', body: 'Body B', categoryId: engineeringCategoryId
+    })
+    const res = await request(app).get('/notes/user/carol@example.com')
+    expect(res.status).toBe(200)
+    expect(res.body.length).toBe(2)
+    expect(res.body[0]).toMatchObject({ user: { email: 'carol@example.com' } })
+  })
+
+  it('returns empty array for user with no notes', async () => {
+    const res = await request(app).get('/notes/user/nobody@example.com')
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual([])
+  })
+})
+
+describe('GET /notes/category/:categoryName', () => {
+  it('returns all notes in a category', async () => {
+    await request(app).post('/notes').send({
+      email: 'dave@example.com', name: 'Dave',
+      title: 'Eng Note', body: 'Body', categoryId: engineeringCategoryId
+    })
+    const res = await request(app).get('/notes/category/engineering')
+    expect(res.status).toBe(200)
+    expect(res.body.length).toBeGreaterThanOrEqual(1)
+    expect(res.body[0]).toMatchObject({ category: { name: 'engineering' } })
+  })
+
+  it('returns 404 for unknown category', async () => {
+    const res = await request(app).get('/notes/category/nonexistent')
+    expect(res.status).toBe(404)
+    expect(res.body).toEqual({ error: 'Category not found' })
+  })
+})
+
+describe('GET /notes/user/:email/category/:categoryName', () => {
+  it('returns notes filtered by user and category', async () => {
+    await request(app).post('/notes').send({
+      email: 'eve@example.com', name: 'Eve',
+      title: 'Eng Note', body: 'Body', categoryId: engineeringCategoryId
+    })
+    const res = await request(app).get('/notes/user/eve@example.com/category/engineering')
+    expect(res.status).toBe(200)
+    expect(res.body.length).toBe(1)
+    expect(res.body[0]).toMatchObject({
+      title: 'Eng Note',
+      user: { email: 'eve@example.com' },
+      category: { name: 'engineering' }
+    })
+  })
+
+  it('returns empty array when no matching notes', async () => {
+    const res = await request(app).get('/notes/user/eve@example.com/category/sales')
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual([])
+  })
+})
