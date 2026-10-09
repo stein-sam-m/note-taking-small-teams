@@ -53,6 +53,12 @@ curl http://localhost:3000/categories \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
+## Architecture Decisions
+
+- **JWT over OAuth:** JWTs were chosen because this API is intended to be used across multiple domains and teams. OAuth would tie us to a single identity provider and complicate cross-domain usage; JWTs are stateless and portable at the cost of no SSO support.
+
+- **Custom ORM approach:** We control the data model entirely — we're the only team using this service. We don't need to bind to each team's existing data structure; all we need is a unique identifier from the org. This lets us keep the schema flexible and tailored to our needs rather than adapting to external data ownership.
+
 ## ⚠️ Token Expiry
 
 Tokens issued by this service **do not expire**. This is intentional for demo convenience. Before any production use, add `expiresIn` to `jwt.sign()` and implement a token refresh flow.
@@ -69,7 +75,7 @@ All endpoints require a valid JWT in the `Authorization: Bearer <token>` header 
 ### Auth
 | method | path | body | response |
 |---|---|---|---|
-| POST | `/auth/register` | `{ email, name, password }` | `201 { id, email, name, createdAt }` |
+| POST | `/auth/register` | `{ email, name, password, clearanceLevelName? }` | `201 { id, email, name, clearanceLevelName, createdAt }` |
 | POST | `/auth/login` | `{ email, password }` | `200 { token }` |
 
 ### Notes
